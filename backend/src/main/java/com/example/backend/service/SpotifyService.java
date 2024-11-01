@@ -7,7 +7,6 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
-import reactor.core.publisher.Mono;
 
 import java.util.Base64;
 
@@ -26,15 +25,19 @@ public class SpotifyService {
     @Value("${spotify.api.url}")
     private String apiUrl;
 
-    private String accessToken;
+    @Value("${spotify.redirect.uri}")
+    private String redirectUri;
+
+    private String clientAccessToken;
+    private String userAccessToken;
 
     private final WebClient webClient = WebClient.builder()
-            .baseUrl("https://api.spotify.com/v1")  // Stelle sicher, dass dies korrekt ist
+            .baseUrl("https://api.spotify.com/v1")
             .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
             .build();
 
-    // Methode zur Authentifizierung und Token-Aktualisierung
-    private void authenticate() {
+    // Methode zur Authentifizierung und Token-Aktualisierung für client-seitige Anfragen
+    private void authenticateClient() {
         String auth = clientId + ":" + clientSecret;
         String encodedAuth = Base64.getEncoder().encodeToString(auth.getBytes());
 
@@ -52,26 +55,56 @@ public class SpotifyService {
                     .block();
 
             JSONObject json = new JSONObject(response);
-            accessToken = json.getString("access_token");
-            System.out.println("Generated Access Token: " + accessToken);
+            clientAccessToken = json.getString("access_token");
+            System.out.println("Generated Client Access Token: " + clientAccessToken);
         } catch (WebClientResponseException e) {
-            System.out.println("Error in authentication: " + e.getResponseBodyAsString());
+            System.out.println("Error in client authentication: " + e.getResponseBodyAsString());
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    // Beispielmethode, um ein Album von Spotify abzurufen
+    // Methode, um den Benutzer-Access-Token auszutauschen
+    public String exchangeCodeForAccessToken(String code) {
+        String tokenUrl = "https://accounts.spotify.com/api/token";
+
+        WebClient webClient = WebClient.builder()
+                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_FORM_URLENCODED_VALUE)
+                .build();
+
+        String clientIdAndSecret = clientId + ":" + clientSecret;
+        String encodedAuth = Base64.getEncoder().encodeToString(clientIdAndSecret.getBytes());
+
+        try {
+            String response = webClient.post()
+                    .uri(tokenUrl)
+                    .header(HttpHeaders.AUTHORIZATION, "Basic " + encodedAuth)
+                    .bodyValue("grant_type=authorization_code&code=" + code + "&redirect_uri=" + redirectUri)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+
+            JSONObject jsonResponse = new JSONObject(response);
+            userAccessToken = jsonResponse.getString("access_token");
+            System.out.println("Generated User Access Token: " + userAccessToken);
+            return userAccessToken;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "Error exchanging code for access token";
+        }
+    }
+
+    // Methode, um ein Album von Spotify abzurufen (client-seitige Authentifizierung)
     public String getAlbum(String albumId) {
-        if (accessToken == null) {
-            authenticate();
+        if (clientAccessToken == null) {
+            authenticateClient();
         }
 
         try {
             return webClient.get()
-                    // Explizite URL mit vollständiger URI
-                    .uri("https://api.spotify.com/v1/albums/{albumId}", albumId)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                    .uri("/albums/{albumId}", albumId)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + clientAccessToken)
                     .retrieve()
                     .bodyToMono(String.class)
                     .block();
@@ -83,5 +116,26 @@ public class SpotifyService {
             return "Error: " + e.getMessage();
         }
     }
-}
 
+    // Methode, um das Profil eines Benutzers abzurufen (benutzerspezifische Authentifizierung)
+    public String getUserProfile() {
+        if (userAccessToken == null) {
+            return "User not authenticated";
+        }
+
+        try {
+            return webClient.get()
+                    .uri("/me")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + userAccessToken)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+        } catch (WebClientResponseException e) {
+            System.out.println("Error fetching user profile: " + e.getResponseBodyAsString());
+            return "Error: " + e.getStatusCode();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "Error: " + e.getMessage();
+        }
+    }
+}

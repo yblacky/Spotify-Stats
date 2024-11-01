@@ -20,5 +20,10 @@ public class SpotifyStatsController {
     public String getAlbum(@PathVariable String albumId) {
         return spotifyService.getAlbum(albumId);
     }
+
+    @GetMapping("/user-profile")
+    public String getUserProfile() {
+        return spotifyService.getUserProfile();
+    }
 }
 
