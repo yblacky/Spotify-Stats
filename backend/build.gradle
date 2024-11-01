@@ -23,7 +23,9 @@ tasks.withType(JavaCompile) {
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
-    implementation 'org.springframework.boot:spring-boot-starter-data-jpa' // optional
-    implementation 'org.springframework.boot:spring-boot-devtools' // optional
+    implementation 'org.json:json:20230618'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-webflux' // WebClient-Abhängigkeit
+    implementation 'org.springframework.boot:spring-boot-devtools'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }
