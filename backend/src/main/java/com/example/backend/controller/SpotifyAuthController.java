@@ -47,4 +47,5 @@ public class SpotifyAuthController {
     public String handleSpotifyCallback(@RequestParam("code") String code) {
         return spotifyService.exchangeCodeForAccessToken(code);
     }
+
 }
